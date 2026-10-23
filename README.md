@@ -21,6 +21,11 @@ Two parts:
 
 The full story, with diagrams: [A Claude usage dashboard on the M5Stack Basic](https://velxio.dev/blog/posts/claude-usage-dashboard-m5stack/).
 
+**No device? Run it in your browser.** The same firmware runs on the simulated M5Stack Core
+in Velxio: [M5Stack Core: Claude usage dashboard](https://velxio.dev/example/m5stack-core-claude-usage).
+It starts on demo accounts; paste the line `m5claude-bridge snapshot` prints into the serial
+monitor to see your own numbers. Bluetooth is left out there (the simulator has no radio).
+
 ## Quick start
 
 You need an [M5Stack Basic v2.7](https://shop.m5stack.com/products/esp32-basic-core-lot-development-kit-v2-7)
