@@ -105,7 +105,7 @@ The Basic's battery is only 110 mAh, so on battery the firmware saves aggressive
 
 With *Screen off on battery* set to *Never*, none of the standby applies. For all-day use
 away from USB, add a bigger battery such as the stackable
-[Battery Module 13.2 (1500 mAh)](https://shop.m5stack.com/products/battery-module-13-2-1500mah).
+[Battery Module 13.2 (1500 mAh)](https://shop.m5stack.com/products/battery-module-13-2-1500mah?ref=ehphcrsn).
 
 ## How it works
 
