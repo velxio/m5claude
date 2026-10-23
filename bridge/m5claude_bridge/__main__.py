@@ -5,6 +5,7 @@
     python -m m5claude_bridge accounts     list configured accounts
     python -m m5claude_bridge init         write ~/.m5claude/config.json from what's detected
     python -m m5claude_bridge add-api NAME (--key-env VAR | --key sk-ant-admin01-...)
+    python -m m5claude_bridge autostart on|off|status
 """
 
 from __future__ import annotations
@@ -13,10 +14,11 @@ import argparse
 import asyncio
 import json
 import logging
+import logging.handlers
 import sys
 import time
 
-from . import __version__, config
+from . import __version__, autostart, config
 from .hub import Hub
 from .snapshot import Collector
 from .transports import ble, tcp, usb_serial
@@ -88,6 +90,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--no-ble", action="store_true", help="don't look for devices over Bluetooth")
         p.add_argument("--no-tcp", action="store_true", help="don't dial the local TCP link (development)")
         p.add_argument("--tcp-port", type=int, default=47800)
+        p.add_argument("--log-file", help="write the log to this file (used by autostart)")
     sub.add_parser("snapshot", help="print one snapshot as JSON")
     sub.add_parser("accounts", help="list configured accounts")
     sub.add_parser("init", help="write a config file from detected accounts")
@@ -96,10 +99,26 @@ def main(argv: list[str] | None = None) -> int:
     g = add.add_mutually_exclusive_group(required=True)
     g.add_argument("--key-env", help="environment variable holding the admin key")
     g.add_argument("--key", help="admin key (stored in plain text in the config file)")
+    auto = sub.add_parser("autostart", help="start the bridge automatically when you log in")
+    auto.add_argument("action", choices=["on", "off", "status"])
     args = ap.parse_args(argv)
 
-    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
-                        format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
+    level = logging.DEBUG if args.verbose else logging.INFO
+    if getattr(args, "log_file", None):
+        config.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        handler = logging.handlers.RotatingFileHandler(args.log_file, maxBytes=1_000_000,
+                                                       backupCount=1, encoding="utf-8")
+        logging.basicConfig(level=level, handlers=[handler],
+                            format="%(asctime)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    else:
+        logging.basicConfig(level=level, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
+
+    if args.cmd == "autostart":
+        if args.action == "status":
+            print(autostart.status())
+        else:
+            print(autostart.set_enabled(args.action == "on"))
+        return 0
 
     if args.cmd == "snapshot":
         snap = Collector(config.load()).collect()
@@ -123,10 +142,16 @@ def main(argv: list[str] | None = None) -> int:
                                                      admin_key_env=args.key_env))
         print(f"wrote {config.save(cfg)}")
         return 0
+    lock = autostart.acquire_instance_lock()  # two bridges would fight over USB and BLE
+    if lock is None:
+        log.error("The bridge is already running (see `m5claude-bridge autostart status`).")
+        return 1
     try:
         asyncio.run(_run(args))
     except KeyboardInterrupt:
         pass
+    finally:
+        lock.close()
     return 0
 
 

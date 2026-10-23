@@ -5,6 +5,7 @@
 #include <LovyanGFX.hpp>
 
 #include "../model/model.h"
+#include "i18n.h"
 
 namespace ui {
 
@@ -26,6 +27,44 @@ void data_updated(bool first);
 void refresh_failed(const char* why);
 
 void toast(const char* msg, uint32_t duration_ms = 1600);
+
+// User settings, persisted by the board (NVS) through Hooks::save.
+struct Settings {
+  uint8_t lang = LANG_EN;
+  uint8_t brightness = 2;  // 0..3 → 25/50/75/100 %
+  uint8_t sounds = 1;      // 0 off, 1 alerts, 2 alerts + clicks
+  uint8_t alert_at = 1;    // 0 → 80 %, 1 → 90 %, 2 → off
+  uint8_t screen_off = 1;  // on battery: 0 never, 1 after 1 min, 2 after 5 min
+  uint8_t night = 0;       // dim 22:00–07:00
+};
+
+enum Sound : uint8_t { SND_CLICK, SND_ALERT, SND_RESET, SND_PAIR };
+
+// What the UI needs from the board. All optional.
+struct Hooks {
+  void (*brightness)(uint8_t level) = nullptr;  // 0 = backlight off
+  void (*sound)(Sound s) = nullptr;
+  void (*save)(const Settings& s) = nullptr;
+  int (*paired_count)() = nullptr;
+  void (*forget_pcs)() = nullptr;
+  const char* device_id = "";
+  const char* version = "";
+};
+
+void set_hooks(const Hooks& h);
+void apply_settings(const Settings& s);
+const Settings& settings();
+const Strings& tr();  // strings in the current language
+
+// After a new snapshot: alerts for limits crossing the threshold, chimes for resets.
+void check_alerts(const cu::Dashboard& before);
+void wake();  // turn the screen back on (alerts, pairing)
+void show_settings(bool open);
+void play_sound(Sound s);
+
+// Battery state from the board: level 0..100 (-1 hides the icon), USB power present,
+// charge complete.
+void set_battery(int level, bool plugged, bool full);
 
 // Modal yes/no question (A = no, C = yes). take_answer(): -1 pending, 0 no, 1 yes.
 void ask(const char* title, const char* subject, const char* question);

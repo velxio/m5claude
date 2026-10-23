@@ -6,8 +6,26 @@ stored on the device, so you can switch computers or Wi-Fi freely.
 
 ```powershell
 pip install -e bridge          # once (Python 3.10+); installs pyserial and bleak
-m5claude-bridge                # or: python -m m5claude_bridge
+m5claude-bridge autostart on   # start now and at every login, no window
 ```
+
+`m5claude-bridge` alone runs it in the foreground with the log in the terminal. Only one
+bridge runs at a time; a second one exits with a message.
+
+## Autostart
+
+```
+m5claude-bridge autostart on       register for login and start it now
+m5claude-bridge autostart off      unregister and stop it
+m5claude-bridge autostart status   registered? running? last log lines
+```
+
+- **Windows**: a `m5claude-bridge` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
+  that starts `pythonw` (no console window).
+- **macOS**: `~/Library/LaunchAgents/dev.velxio.m5claude-bridge.plist`, kept alive by launchd.
+- **Linux**: a systemd user unit, `~/.config/systemd/user/m5claude-bridge.service`.
+
+The log goes to `~/.m5claude/bridge.log` (rotated at 1 MB).
 
 ## Accounts
 
@@ -45,6 +63,7 @@ m5claude-bridge snapshot     print one snapshot (JSON) plus a summary
 m5claude-bridge accounts     list accounts and where their data comes from
 m5claude-bridge init         write ~/.m5claude/config.json from detected accounts (to rename/reorder)
 m5claude-bridge add-api …    add an API organization
+m5claude-bridge autostart …  on | off | status
   --every N    refresh period   --no-usb    skip USB   --no-ble    skip Bluetooth
   --no-tcp     skip the local development TCP link (127.0.0.1:47800)
 ```

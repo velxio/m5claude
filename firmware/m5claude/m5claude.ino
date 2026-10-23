@@ -173,6 +173,115 @@ static void ble_poll() {
   while ((n = xStreamBufferReceive(ble_rx_buf, buf, sizeof buf, 0)) > 0) app::link_rx(LINK_BLE, buf, n);
 }
 
+// ------------------------------------------------------------ battery ---
+// IP5306 power manager on the internal I2C bus (SDA 21, SCL 22), same registers as
+// M5Stack's own libraries. Its fuel gauge reports four steps: 25/50/75/100 %.
+
+// LovyanGFX's I2C helpers (the ones its board autodetection uses for power chips).
+constexpr int kI2cPort = 1;
+constexpr uint8_t kIp5306 = 0x75;
+constexpr uint32_t kI2cFreq = 100000;
+
+static bool ip5306_read(uint8_t reg, uint8_t& val) {
+  return lgfx::i2c::transactionWriteRead(kI2cPort, kIp5306, &reg, 1, &val, 1, kI2cFreq).has_value();
+}
+
+static bool ip5306_write(uint8_t reg, uint8_t val) {
+  const uint8_t buf[2] = {reg, val};
+  return lgfx::i2c::transactionWrite(kI2cPort, kIp5306, buf, 2, kI2cFreq).has_value();
+}
+
+static void battery_begin() {
+  lgfx::i2c::init(kI2cPort, 21, 22);
+  // Keep the 5 V boost on at light load; otherwise the IP5306 cuts power on battery
+  // when the board draws little (screen off, BLE idle).
+  uint8_t ctl0;
+  if (ip5306_read(0x00, ctl0)) ip5306_write(0x00, ctl0 | 0x02);
+}
+
+static void battery_poll() {
+  static uint32_t last = 0;
+  if (last && millis() - last < 2000) return;
+  last = millis();
+  uint8_t level_reg, read0, read1;
+  if (!ip5306_read(0x78, level_reg)) {
+    ui::set_battery(-1, false, false);  // no gauge (or no battery base)
+    return;
+  }
+  int level;
+  switch (level_reg >> 4) {
+    case 0x00: level = 100; break;
+    case 0x08: level = 75; break;
+    case 0x0C: level = 50; break;
+    case 0x0E: level = 25; break;
+    default: level = 0;
+  }
+  const bool plugged = ip5306_read(0x70, read0) && (read0 & 0x08);
+  const bool full = plugged && ip5306_read(0x71, read1) && (read1 & 0x08);
+  static int logged = -2;
+  const int code = level * 4 + plugged * 2 + full;
+  if (code != logged) {  // diagnostics on the serial port (non-JSON lines are ignored)
+    logged = code;
+    Serial.printf("# battery %d%% plugged=%d full=%d (0x78=%02X)\n", level, plugged, full, level_reg);
+  }
+  ui::set_battery(level, plugged, full);
+}
+
+// ------------------------------------------------------------ speaker ---
+// The 1 W speaker on GPIO 25, driven with LEDC square waves at a low duty (volume).
+
+constexpr int kSpeakerPin = 25, kSpeakerCh = 2;
+constexpr uint32_t kVolume = 24;  // duty out of 1023
+
+struct Note {
+  uint16_t freq;  // 0 = rest
+  uint16_t ms;
+};
+static const Note kClick[] = {{2400, 12}};
+static const Note kAlert[] = {{880, 110}, {0, 60}, {880, 110}, {0, 60}, {1175, 220}};
+static const Note kReset[] = {{523, 90}, {659, 90}, {784, 160}};
+static const Note kPair[] = {{1047, 80}, {1319, 140}};
+static const Note* s_tune = nullptr;
+static size_t s_tune_len = 0, s_tune_pos = 0;
+static uint32_t s_note_end = 0;
+
+static void speaker_off() {
+  ledcWrite(kSpeakerCh, 0);
+  ledcDetachPin(kSpeakerPin);
+  pinMode(kSpeakerPin, OUTPUT);
+  digitalWrite(kSpeakerPin, LOW);  // no hiss between sounds
+}
+
+static void play_tune(ui::Sound snd) {
+  switch (snd) {
+    case ui::SND_CLICK: s_tune = kClick; s_tune_len = 1; break;
+    case ui::SND_ALERT: s_tune = kAlert; s_tune_len = 5; break;
+    case ui::SND_RESET: s_tune = kReset; s_tune_len = 3; break;
+    case ui::SND_PAIR: s_tune = kPair; s_tune_len = 2; break;
+  }
+  s_tune_pos = 0;
+  s_note_end = 0;
+  ledcSetup(kSpeakerCh, 1000, 10);
+  ledcAttachPin(kSpeakerPin, kSpeakerCh);
+}
+
+static void speaker_poll() {
+  if (!s_tune || millis() < s_note_end) return;
+  if (s_tune_pos >= s_tune_len) {
+    s_tune = nullptr;
+    speaker_off();
+    return;
+  }
+  const Note& n = s_tune[s_tune_pos++];
+  if (n.freq) {
+    ledcWriteTone(kSpeakerCh, n.freq);
+    ledcWrite(kSpeakerCh, kVolume);
+  } else {
+    ledcWrite(kSpeakerCh, 0);
+  }
+  s_note_end = millis() + n.ms;
+}
+
 // -------------------------------------------------------- trusted PCs ---
 
 static bool is_trusted_pc(const char* pcid) {
@@ -202,6 +311,14 @@ static void trust_pc(const char* pcid) {
   prefs.putString("pcs", out);
 }
 
+static int paired_count() {
+  String list = prefs.getString("pcs", "");
+  if (!list.length()) return 0;
+  int n = 1;
+  for (char c : list) n += c == ',';
+  return n;
+}
+
 // ------------------------------------------------------------- arduino ---
 
 void setup() {
@@ -216,9 +333,31 @@ void setup() {
 
   lcd.init();
   lcd.setRotation(1);
-  lcd.setBrightness(170);
+  lcd.setBrightness(160);
   Serial.printf("# lcd %dx%d rot=%d\n", lcd.width(), lcd.height(), lcd.getRotation());
   prefs.begin("m5claude", false);
+  battery_begin();
+
+  ui::Hooks hooks;
+  hooks.brightness = [](uint8_t level) {
+    if (level == 0) {
+      lcd.setBrightness(0);
+      lcd.sleep();
+    } else {
+      lcd.wakeup();
+      lcd.setBrightness(level);
+    }
+  };
+  hooks.sound = play_tune;
+  hooks.save = [](const ui::Settings& st) { prefs.putBytes("set", &st, sizeof st); };
+  hooks.paired_count = paired_count;
+  hooks.forget_pcs = [] { prefs.remove("pcs"); };
+  hooks.device_id = device_id;
+  hooks.version = app::kFirmwareVersion;
+  ui::set_hooks(hooks);
+  ui::Settings st;
+  if (prefs.getBytesLength("set") == sizeof st) prefs.getBytes("set", &st, sizeof st);
+  ui::apply_settings(st);
 
   app::Platform p;
   p.write = [](int link, const char* d, size_t n) {
@@ -235,7 +374,7 @@ void setup() {
   // Holding A while powering on forgets every approved computer.
   if (!lgfx::gpio_in(ui::kPinA)) {
     prefs.remove("pcs");
-    ui::toast("Paired computers cleared", 3000);
+    ui::toast(ui::tr().pcs_cleared, 3000);
   }
 
   ble_begin();
@@ -250,6 +389,8 @@ void loop() {
     app::link_rx(LINK_USB, buf, n);
   }
   ble_poll();
+  battery_poll();
+  speaker_poll();
   app::loop(millis());
   delay(5);
 }

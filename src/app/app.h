@@ -20,7 +20,7 @@
 
 namespace app {
 
-constexpr const char* kFirmwareVersion = "0.1.0";
+constexpr const char* kFirmwareVersion = "0.2.0";
 constexpr int kMaxLinks = 2;
 
 struct Platform {

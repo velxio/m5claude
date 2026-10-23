@@ -80,12 +80,15 @@ static void on_line(int link, const char* line) {
   }
   if (!accepted(l)) return;  // snapshots from an unapproved PC are ignored
   const bool first = !s_dash.received;
+  static cu::Dashboard before;  // static: too big for the loop task's stack
+  before = s_dash;
   if (!cu::parse_snapshot(line, s_dash)) return;
   s_demo = false;
   l.got_data = true;
   l.rx_ms = s_rx_ms = s_ms;
   s_rx_epoch = s_dash.fetched_at;
   ui::data_updated(first);
+  if (!first) ui::check_alerts(before);
 }
 
 void begin(lgfx::LovyanGFX* lcd, const char* device_id, const Platform& p, bool demo) {
@@ -135,7 +138,8 @@ static void pairing() {
       if (s_links[i].up && s_links[i].pair == Pair::Pending) {
         s_asking = i;
         s_links[i].pair = Pair::Asking;
-        ui::ask("New computer", s_links[i].pc, "Allow it to send usage data?");
+        ui::ask(ui::tr().new_computer, s_links[i].pc, ui::tr().allow_question);
+        ui::play_sound(ui::SND_PAIR);
         break;
       }
     }
@@ -149,7 +153,7 @@ static void pairing() {
     if (s_p.trust_pc && l.pcid[0]) s_p.trust_pc(l.pcid);
     send(s_asking, "{\"pair\":\"ok\"}\n");
     send(s_asking, "{\"req\":\"refresh\"}\n");
-    ui::toast("Computer paired");
+    ui::toast(ui::tr().paired);
   } else {
     send(s_asking, "{\"pair\":\"denied\"}\n");
     l.pair = Pair::None;
@@ -189,7 +193,7 @@ void loop(uint32_t ms, int64_t host_epoch) {
         sent = true;
       }
     }
-    if (!sent) ui::refresh_failed("PC not connected");
+    if (!sent) ui::refresh_failed(ui::tr().pc_not_connected);
   }
 
   int64_t now = host_epoch;

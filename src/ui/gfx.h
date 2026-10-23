@@ -61,6 +61,10 @@ struct G {
   void rrect(int x, int y, int w, int h, int r, uint32_t c) {
     if (vis(y, h)) s->fillSmoothRoundRect(x, Y(y), w, h, r, c);
   }
+  void tri(int x0, int y0, int x1, int y1, int x2, int y2, uint32_t c) {
+    int top = y0 < y1 ? (y0 < y2 ? y0 : y2) : (y1 < y2 ? y1 : y2);
+    if (vis(top, 16)) s->fillTriangle(x0, Y(y0), x1, Y(y1), x2, Y(y2), c);
+  }
   void circle(int x, int y, int r, uint32_t c) {
     if (vis(y - r, 2 * r + 1)) s->fillSmoothCircle(x, Y(y), r, c);
   }
