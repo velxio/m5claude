@@ -1,0 +1,16 @@
+# Build output
+build/
+__pycache__/
+*.egg-info/
+
+# Local-only development tools (not published)
+sim/
+third_party/
+tools/make_frame.py
+.remember/
+
+# Font sources: download Inter from https://github.com/rsms/inter
+tools/fonts/
+
+# Junction/symlink to ../../src created by the build scripts
+firmware/m5claude/src

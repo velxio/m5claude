@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "m5claude-bridge"
+version = "0.1.0"
+description = "Pushes Claude usage (Pro/Max limits, API spend, tokens) to an M5Stack dashboard"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["pyserial>=3.5", "bleak>=0.22"]
+
+[project.scripts]
+m5claude-bridge = "m5claude_bridge.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["m5claude_bridge*"]
