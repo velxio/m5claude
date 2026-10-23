@@ -4,7 +4,9 @@ Shows how much of your Claude plan is left, on your desk: the 5-hour session and
 limits of Pro and Max accounts (including per-model weekly limits), spend for API
 organizations, and tokens per day, on an M5Stack Basic v2.7.
 
-![Overview with one Max account](docs/overview-one-account.webp)
+![The M5Stack Basic showing a Claude Max account at 88% of its weekly limit](docs/desk-overview.webp)
+
+Video: [the dashboard running on the device](https://youtube.com/shorts/eqY8IMISsC8).
 
 Two parts:
 
