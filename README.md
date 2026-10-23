@@ -8,6 +8,10 @@ organizations, and tokens per day, on an M5Stack Basic v2.7.
 
 Video: [the dashboard running on the device](https://youtube.com/shorts/eqY8IMISsC8).
 
+Every screen, with its entry animation (demo accounts):
+
+![Animated tour of every screen: overview, limits, tokens, breakdown, an API organization, the battery charging, settings in English and Spanish, pairing and the waiting screen](docs/tour.gif)
+
 Two parts:
 
 - **Firmware** (`firmware/` + `src/`) for the M5Stack Basic: draws the dashboard and
