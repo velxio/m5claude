@@ -28,9 +28,11 @@ monitor to see your own numbers. Bluetooth is left out there (the simulator has 
 
 ## Quick start
 
-You need an [M5Stack Basic v2.7](https://shop.m5stack.com/products/esp32-basic-core-lot-development-kit-v2-7)
+You need an [M5Stack Basic v2.7](https://shop.m5stack.com/products/esp32-basic-core-lot-development-kit-v2-7?ref=ehphcrsn)
 (older Basic/Gray/Fire units with the same pins should work), a USB-C cable, Python 3.10+
 and [`arduino-cli`](https://arduino.github.io/arduino-cli/).
+
+<sub>The M5Stack store link is an affiliate link: buying through it gives Velxio a small commission at no extra cost to you.</sub>
 
 **1. Flash the firmware**
 
