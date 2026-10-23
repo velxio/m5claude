@@ -42,5 +42,6 @@ void link_rx(int link, const char* data, size_t len);
 void loop(uint32_t ms, int64_t host_epoch = 0);
 
 const cu::Dashboard& dashboard();
+uint32_t snapshots_received();  // count since boot (lets the board end a sync window early)
 
 }  // namespace app

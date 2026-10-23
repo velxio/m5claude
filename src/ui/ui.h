@@ -59,6 +59,7 @@ const Strings& tr();  // strings in the current language
 // After a new snapshot: alerts for limits crossing the threshold, chimes for resets.
 void check_alerts(const cu::Dashboard& before);
 void wake();  // turn the screen back on (alerts, pairing)
+bool screen_is_off();  // backlight off (idle on battery): the board may go to standby
 void show_settings(bool open);
 void play_sound(Sound s);
 

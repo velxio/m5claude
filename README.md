@@ -88,6 +88,25 @@ while it charges.
 
 A limit that resets plays a short rising chime.
 
+### Battery life
+
+The Basic's battery is only 110 mAh, so on battery the firmware saves aggressively:
+
+- **CPU at 80 MHz** instead of 240 (switches back on USB power).
+- **Backlight**: dims after 20 s without a button press, then turns off after the time
+  set in *Screen off on battery* (1 or 5 min).
+- **Standby**: 15 s after the screen goes off, the radio is shut down and the ESP32 enters
+  light sleep. Any button wakes it with the last data on screen; the bridge reconnects within
+  seconds. Every 10 minutes it wakes briefly, with the screen off, to fetch fresh data (and
+  to raise an alert if a limit crossed the threshold).
+- **Bluetooth**: 0 dBm transmit power, advertising every 0.5–1 s, a 100–200 ms connection
+  interval with slave latency.
+- **Repaints** only when the minute changes or something new arrives.
+
+With *Screen off on battery* set to *Never*, none of the standby applies. For all-day use
+away from USB, add a bigger battery such as the stackable
+[Battery Module 13.2 (1500 mAh)](https://shop.m5stack.com/products/battery-module-13-2-1500mah).
+
 ## How it works
 
 ```

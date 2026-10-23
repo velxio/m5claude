@@ -41,7 +41,10 @@ static uint32_t s_ms = 0;
 static uint32_t s_rx_ms = 0;    // when the last snapshot arrived (any link)
 static int64_t s_rx_epoch = 0;  // its timestamp
 
+static uint32_t s_rx_count = 0;
+
 const cu::Dashboard& dashboard() { return s_dash; }
+uint32_t snapshots_received() { return s_rx_count; }
 
 static void send(int link, const char* s) {
   if (s_p.write && s_links[link].up) s_p.write(link, s, strlen(s));
@@ -84,6 +87,7 @@ static void on_line(int link, const char* line) {
   before = s_dash;
   if (!cu::parse_snapshot(line, s_dash)) return;
   s_demo = false;
+  ++s_rx_count;
   l.got_data = true;
   l.rx_ms = s_rx_ms = s_ms;
   s_rx_epoch = s_dash.fetched_at;

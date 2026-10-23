@@ -10,6 +10,8 @@
 #include <LovyanGFX.hpp>
 #include <NimBLEDevice.h>
 #include <Preferences.h>
+#include <driver/gpio.h>
+#include <esp_sleep.h>
 #include <freertos/stream_buffer.h>
 
 #include "src/app/app.h"
@@ -106,7 +108,9 @@ static volatile uint16_t ble_mtu = 23;
 class ServerCb : public NimBLEServerCallbacks {
   void onConnect(NimBLEServer* s, NimBLEConnInfo& info) override {
     ble_conn = info.getConnHandle();
-    s->updateConnParams(info.getConnHandle(), 12, 24, 0, 400);
+    // A ~600-byte snapshot a minute needs little bandwidth: a 100–200 ms connection
+    // interval with slave latency 2 keeps the radio mostly idle (units: 1.25 ms, 10 ms).
+    s->updateConnParams(info.getConnHandle(), 80, 160, 2, 400);
   }
   void onDisconnect(NimBLEServer*, NimBLEConnInfo&, int) override {
     ble_conn = 0xFFFF;
@@ -131,13 +135,17 @@ class TxCb : public NimBLECharacteristicCallbacks {
   }
 };
 
-static void ble_begin() {
-  ble_rx_buf = xStreamBufferCreate(8192, 1);
+static bool ble_on = false;
+
+static void ble_start() {
+  if (ble_on) return;
+  ble_on = true;
+  xStreamBufferReset(ble_rx_buf);
   char name[24];
   snprintf(name, sizeof name, "M5Claude-%s", device_id + 4);
   NimBLEDevice::init(name);
   NimBLEDevice::setMTU(247);
-  NimBLEDevice::setPower(ESP_PWR_LVL_P9);
+  NimBLEDevice::setPower(ESP_PWR_LVL_N0);  // 0 dBm: plenty for a desk, saves current
   ble_server = NimBLEDevice::createServer();
   ble_server->setCallbacks(new ServerCb());
   NimBLEService* svc = ble_server->createService(kSvcUuid);
@@ -150,11 +158,26 @@ static void ble_begin() {
   adv->addServiceUUID(kSvcUuid);
   adv->setName(name);
   adv->enableScanResponse(true);
+  adv->setMinInterval(800);   // 500 ms (units of 0.625 ms); the bridge scans for 4 s at a time
+  adv->setMaxInterval(1600);  // 1 s
   adv->start();
 }
 
+// Radio fully off (standby). NimBLE frees everything; ble_start() rebuilds it.
+static void ble_stop() {
+  if (!ble_on) return;
+  ble_on = false;
+  NimBLEDevice::deinit(true);
+  ble_server = nullptr;
+  ble_tx = nullptr;
+  ble_subscribed = false;
+  ble_conn = 0xFFFF;
+  ble_changed = false;
+  app::link_down(LINK_BLE);
+}
+
 static void ble_write(const char* data, size_t len) {
-  if (!ble_subscribed) return;
+  if (!ble_on || !ble_subscribed) return;
   const size_t chunk = ble_mtu > 23 ? ble_mtu - 3 : 20;
   for (size_t off = 0; off < len; off += chunk) {
     size_t n = len - off < chunk ? len - off : chunk;
@@ -199,6 +222,8 @@ static void battery_begin() {
   if (ip5306_read(0x00, ctl0)) ip5306_write(0x00, ctl0 | 0x02);
 }
 
+static bool s_on_battery = false;  // no USB power: save energy
+
 static void battery_poll() {
   static uint32_t last = 0;
   if (last && millis() - last < 2000) return;
@@ -225,6 +250,7 @@ static void battery_poll() {
     Serial.printf("# battery %d%% plugged=%d full=%d (0x78=%02X)\n", level, plugged, full, level_reg);
   }
   ui::set_battery(level, plugged, full);
+  s_on_battery = !plugged;
 }
 
 // ------------------------------------------------------------ speaker ---
@@ -280,6 +306,62 @@ static void speaker_poll() {
     ledcWrite(kSpeakerCh, 0);
   }
   s_note_end = millis() + n.ms;
+}
+
+// -------------------------------------------------------------- power ---
+// The Basic's 110 mAh battery lasts well under an hour with the radio, CPU and
+// backlight all on. On battery: CPU at 80 MHz, and once the screen has been off for a
+// while, standby: radio off and the CPU in light sleep (RAM kept), woken by any button
+// or by a timer that briefly turns the radio on to fetch fresh data, screen still off.
+
+constexpr uint32_t kStandbyAfterMs = 15000;           // screen off this long → standby
+constexpr uint64_t kSyncEveryUs = 10ULL * 60 * 1000000;  // background refresh period
+constexpr uint32_t kSyncWindowMs = 45000;             // radio-on time per refresh
+
+static const gpio_num_t kButtons[3] = {GPIO_NUM_39, GPIO_NUM_38, GPIO_NUM_37};
+
+static void set_cpu_mhz(uint32_t mhz) {
+  if (getCpuFrequencyMhz() != mhz) setCpuFrequencyMhz(mhz);  // BLE needs ≥ 80 MHz
+}
+
+static bool any_button_down() {
+  for (gpio_num_t b : kButtons)
+    if (!gpio_get_level(b)) return true;
+  return false;
+}
+
+static void serve_links();  // defined with loop()
+
+// Returns when a button is pressed, USB power appears, or an alert turns the screen on.
+static void standby() {
+  ble_stop();
+  for (;;) {
+    for (gpio_num_t b : kButtons) gpio_wakeup_enable(b, GPIO_INTR_LOW_LEVEL);
+    esp_sleep_enable_gpio_wakeup();
+    esp_sleep_enable_timer_wakeup(kSyncEveryUs);
+    Serial.flush();
+    esp_light_sleep_start();
+    for (gpio_num_t b : kButtons) gpio_wakeup_disable(b);
+    if (esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_TIMER) break;  // a button
+
+    // Background refresh with the screen off.
+    ble_start();
+    const uint32_t seen = app::snapshots_received(), t0 = millis();
+    while (millis() - t0 < kSyncWindowMs && app::snapshots_received() == seen) {
+      serve_links();
+      if (!s_on_battery || !ui::screen_is_off() || any_button_down()) {  // stay awake
+        ui::wake();
+        return;
+      }
+      delay(20);
+    }
+    serve_links();
+    if (!ui::screen_is_off()) return;  // an alert from the new data lit the screen
+    ble_stop();
+  }
+  while (any_button_down()) delay(10);  // the press that wakes it does nothing else
+  ble_start();
+  ui::wake();
 }
 
 // -------------------------------------------------------- trusted PCs ---
@@ -377,20 +459,36 @@ void setup() {
     ui::toast(ui::tr().pcs_cleared, 3000);
   }
 
-  ble_begin();
+  ble_rx_buf = xStreamBufferCreate(8192, 1);
+  ble_start();
   app::link_up(LINK_USB, true);
 }
 
-void loop() {
+static void serve_links() {
   static char buf[256];
   int n;
   while ((n = Serial.available()) > 0) {
     n = Serial.readBytes(buf, n < (int)sizeof buf ? n : sizeof buf);
     app::link_rx(LINK_USB, buf, n);
   }
-  ble_poll();
+  if (ble_on) ble_poll();
   battery_poll();
   speaker_poll();
   app::loop(millis());
-  delay(5);
+}
+
+void loop() {
+  serve_links();
+
+  set_cpu_mhz(s_on_battery ? 80 : 240);
+  static uint32_t screen_off_since = 0;
+  if (!s_on_battery || !ui::screen_is_off()) {
+    screen_off_since = 0;
+  } else if (!screen_off_since) {
+    screen_off_since = millis();
+  } else if (millis() - screen_off_since > kStandbyAfterMs) {
+    standby();
+    screen_off_since = 0;
+  }
+  delay(s_on_battery ? 20 : 5);
 }

@@ -77,6 +77,8 @@ static int s_bright = -1;  // value last sent to the backlight
 static bool s_hint_shown = false;
 static constexpr uint8_t kBrightness[4] = {40, 90, 160, 255};
 static constexpr uint8_t kNightBrightness = 30;
+static constexpr uint32_t kIdleDimMs = 20000;
+static int64_t s_drawn_minute = -1;
 
 static const Strings* T = &kStrings[LANG_EN];
 
@@ -986,7 +988,10 @@ static void update_backlight(uint32_t ms, int64_t now) {
   static const uint32_t kOffAfter[3] = {0, 60000, 300000};
   const uint32_t off_after = kOffAfter[s_set.screen_off % 3];
   const bool on_battery = s_batt >= 0 && !s_plugged;
-  if (on_battery && off_after && !s_ask && ms - s_last_input > off_after) target = 0;
+  const uint32_t idle = ms - s_last_input;
+  // On battery the backlight is the biggest load: dim after a short idle, then off.
+  if (on_battery && !s_ask && idle > kIdleDimMs && target > kBrightness[0]) target = kBrightness[0];
+  if (on_battery && off_after && !s_ask && idle > off_after) target = 0;
   if (target == s_bright) return;
   if (s_bright == 0) s_dirty = true;  // repaint what changed while it was dark
   s_bright = target;
@@ -1008,14 +1013,21 @@ void loop(uint32_t ms, int64_t now) {
     if (s_anim > 1) s_anim = 1;
     s_dirty = true;
   }
-  if (ms - s_last_draw >= 1000) s_dirty = true;  // clock & countdowns
-  if (s_data && !s_data->received && ms - s_last_draw >= 90) s_dirty = true;  // waiting pulse
+  // The clock and countdowns show minutes: repaint when the minute changes, not every
+  // second (a full repaint is ~60 ms of CPU and SPI). Idle animations only on USB power.
+  const bool on_battery = s_batt >= 0 && !s_plugged;
+  if (now > 0 && now / 60 != s_drawn_minute) s_dirty = true;
+  if (now <= 0 && ms - s_last_draw >= 30000) s_dirty = true;
+  if (!on_battery && s_data && !s_data->received && ms - s_last_draw >= 90) s_dirty = true;
   if (s_plugged && !s_full && s_batt >= 0 && ms - s_last_draw >= 600) s_dirty = true;  // charging
   if (!s_dirty) return;
   s_dirty = false;
   s_last_draw = ms;
+  s_drawn_minute = now > 0 ? now / 60 : -1;
   render(s_lcd, s_view, now, ease(s_anim), toast_on);
 }
+
+bool screen_is_off() { return s_bright == 0; }
 
 bool take_refresh_request() {
   bool r = s_refresh_req;
