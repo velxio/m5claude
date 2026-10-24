@@ -107,6 +107,38 @@ With *Screen off on battery* set to *Never*, none of the standby applies. For al
 away from USB, add a bigger battery such as the stackable
 [Battery Module 13.2 (1500 mAh)](https://shop.m5stack.com/products/battery-module-13-2-1500mah?ref=ehphcrsn).
 
+## Screens
+
+Every screen, captured from the firmware's own renderer (demo accounts):
+
+<table>
+<tr>
+<td align="center"><img src="docs/overview-one-account.webp" width="300"><br><sub><b>Overview, one account</b><br>weekly ring, session, per-model limits</sub></td>
+<td align="center"><img src="docs/overview-two-accounts.webp" width="300"><br><sub><b>Overview, two accounts</b><br>taller cards with today's usage</sub></td>
+<td align="center"><img src="docs/overview-three-accounts.webp" width="300"><br><sub><b>Overview, three accounts</b><br>Pro/Max and an API organization</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/limits.webp" width="300"><br><sub><b>Limits</b><br>weekly ring and every limit with its reset</sub></td>
+<td align="center"><img src="docs/tokens.webp" width="300"><br><sub><b>Tokens</b><br>today, 7 days, API value, per-day bars</sub></td>
+<td align="center"><img src="docs/breakdown.webp" width="300"><br><sub><b>Breakdown</b><br>token types and models</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/overview-api-account.webp" width="300"><br><sub><b>API organization</b><br>spend instead of plan limits</sub></td>
+<td align="center"><img src="docs/settings.webp" width="300"><br><sub><b>Settings</b><br>language, brightness, sounds, alerts</sub></td>
+<td align="center"><img src="docs/settings-es.webp" width="300"><br><sub><b>Settings, Spanish</b><br>every string is translated</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/overview-es.webp" width="300"><br><sub><b>Overview, Spanish</b></sub></td>
+<td align="center"><img src="docs/battery-charging.webp" width="300"><br><sub><b>Charging</b><br>bolt and a fill that climbs</sub></td>
+<td align="center"><img src="docs/pairing.webp" width="300"><br><sub><b>New computer</b><br>A = Deny, C = Allow</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/waiting.webp" width="300"><br><sub><b>Waiting for the PC</b><br>shown until the bridge connects</sub></td>
+<td align="center"><img src="docs/architecture.svg" width="300"><br><sub><b>How the data flows</b></sub></td>
+<td align="center"><a href="docs/tour.gif">▶ &nbsp;Animated tour (GIF)</a><br><sub>every screen, with its entry animation</sub></td>
+</tr>
+</table>
+
 ## How it works
 
 ```
