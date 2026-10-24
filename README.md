@@ -36,7 +36,7 @@ Every screen, captured from the firmware's own renderer (demo accounts):
 <tr>
 <td align="center"><img src="docs/waiting.webp" width="300"><br><sub><b>Waiting for the PC</b><br>shown until the bridge connects</sub></td>
 <td align="center"><img src="docs/architecture.svg" width="300"><br><sub><b>How the data flows</b></sub></td>
-<td align="center"><a href="docs/tour.gif">▶ &nbsp;Animated tour (GIF)</a><br><sub>every screen, with its entry animation</sub></td>
+<td align="center"><a href="docs/tour.gif"><img src="docs/tour.gif" width="300" alt="Animated tour of every screen"></a><br><sub><b>Animated tour</b><br>every screen, with its entry animation</sub></td>
 </tr>
 </table>
 
